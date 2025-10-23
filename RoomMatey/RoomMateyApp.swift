@@ -9,9 +9,25 @@ import SwiftUI
 
 @main
 struct RoomMateyApp: App {
+    @AppStorage("profileName") var profileName: String = ""
+    @AppStorage("groupName") var groupName: String = ""
+    @AppStorage("isAuthenticated") var isAuthenticated: Bool = false
+    @AppStorage("profileImageData") var profileImageData: Data?
+    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if !hasCompletedOnboarding {
+                OnboardingView()
+            } else if !isAuthenticated {
+                AuthenticationView()
+            } else if profileName.isEmpty {
+                ProfileSetupView()
+            } else if groupName.isEmpty {
+                GroupSetupView()
+            } else {
+                ContentView()
+            }
         }
     }
 }
