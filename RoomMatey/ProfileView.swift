@@ -128,7 +128,7 @@ struct ProfileView: View {
                             
                             HStack(spacing: 12) {
                                 Button(action: {
-                                    UIPasteboard.general.string = inviteLink
+//                                    UIPasteboard.general.string = inviteLink
                                     showingCopiedAlert = true
                                 }) {
                                     HStack {
@@ -198,24 +198,24 @@ struct ProfileView: View {
             .alert("Link Copied!", isPresented: $showingCopiedAlert) {
                 Button("OK", role: .cancel) { }
             }
-            .sheet(isPresented: $showingShareSheet) {
-                if let url = URL(string: inviteLink) {
-                    ShareSheet(items: [url])
-                }
-            }
+//            .sheet(isPresented: $showingShareSheet) {
+//                if let url = URL(string: inviteLink) {
+//                    ShareSheet(items: [url])
+//                }
+//            }
         }
     }
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
+//struct ShareSheet: UIViewControllerRepresentable {
+//    let items: [Any]
+//    
+//    func makeUIViewController(context: Context) -> UIActivityViewController {
+//        UIActivityViewController(activityItems: items, applicationActivities: nil)
+//    }
+//    
+//    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+//}
 
 struct AuthenticationView: View {
     @AppStorage("isAuthenticated") var isAuthenticated: Bool = false
