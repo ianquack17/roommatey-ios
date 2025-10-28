@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-internal import UniformTypeIdentifiers
+import UniformTypeIdentifiers
 
 struct BulletinView: View {
     @EnvironmentObject var appState: AppState
@@ -33,6 +33,7 @@ struct BulletinView: View {
                     ForEach(viewModel.notes) { note in
                         PostItNoteView(
                             note: note,
+                            viewSize: geometry.size,
                             onTap: {
                                 viewModel.selectNote(note)
                             },
@@ -42,8 +43,11 @@ struct BulletinView: View {
                             onDragStart: {
                                 viewModel.startDrag(note)
                             },
-                            onDragEnd: {
-                                viewModel.endDrag()
+                            onDragEnd: { newPosition in
+                                 if !viewModel.handleDrop(at: newPosition, viewSize: geometry.size) {
+                                     viewModel.updateNotePosition(note.id, newPosition)
+                                 }
+                                 viewModel.endDrag()
                             },
                             onDelete: {
                                 viewModel.deleteNote(note.id)
@@ -104,20 +108,16 @@ struct BulletinView: View {
                 NoteDetailView(note: note)
             }
         }
-        .onDrop(of: [.text], delegate: DeleteDropDelegate(
-            onDrop: { location in
-                return viewModel.handleDrop(at: location)
-            }
-        ))
     }
 }
 
 struct PostItNoteView: View {
     let note: BulletinNote
+    let viewSize: CGSize
     let onTap: () -> Void
     let onDrag: (CGPoint) -> Void
     let onDragStart: () -> Void
-    let onDragEnd: () -> Void
+    let onDragEnd: (CGPoint) -> Void
     let onDelete: () -> Void
     
     @State private var dragOffset = CGSize.zero
@@ -173,32 +173,21 @@ struct PostItNoteView: View {
                         y: note.position.y + value.translation.height
                     )
                     
-                    // Check if dropped in delete zone (bottom-right corner)
-                    let screenWidth = UIScreen.main.bounds.width
-                    let screenHeight = UIScreen.main.bounds.height
-                    let deleteZoneX = screenWidth - 80
-                    let deleteZoneY = screenHeight - 80
+                    // Check if dropped in delete zone
+                    let deleteZoneX = viewSize.width - 80
+                    let deleteZoneY = viewSize.height - 80
                     
                     if newPosition.x > deleteZoneX && newPosition.y > deleteZoneY {
-                        // Note is in delete zone - trigger delete
+                        // Trigger delete
                         onDelete()
                         return // Don't update position if deleting
                     }
                     
-                    onDrag(newPosition)
+                    onDragEnd(newPosition)
                     dragOffset = .zero
                     isDragging = false
-                    onDragEnd()
                 }
         )
-    }
-}
-
-struct DeleteDropDelegate: DropDelegate {
-    let onDrop: (CGPoint) -> Bool
-    
-    func performDrop(info: DropInfo) -> Bool {
-        return onDrop(info.location)
     }
 }
 

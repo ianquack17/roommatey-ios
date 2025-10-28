@@ -8,7 +8,6 @@
 import Foundation
 import Combine
 import SwiftUI
-import UIKit
 
 class BulletinViewModel: ObservableObject {
     @Published var notes: [BulletinNote] = []
@@ -65,18 +64,14 @@ class BulletinViewModel: ObservableObject {
         showingDeleteZone = false
     }
     
-    func handleDrop(at location: CGPoint) -> Bool {
+    func handleDrop(at location: CGPoint, viewSize: CGSize) -> Bool {
         guard let draggedNote = draggedNote else { return false }
         
         // Check if dropped in delete zone
         // The delete zone is positioned in the bottom-right corner
         // with trailing: 20, bottom: 20, and a 60x60 circle
-        let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
-        
-        // Delete zone bounds: bottom-right corner with padding
-        let deleteZoneX = screenWidth - 80  // 20 (padding) + 60 (circle) = 80
-        let deleteZoneY = screenHeight - 80 // 20 (padding) + 60 (circle) = 80
+        let deleteZoneX = viewSize.width - 80  // 20 (padding) + 60 (circle) = 80
+        let deleteZoneY = viewSize.height - 80 // 20 (padding) + 60 (circle) = 80
         
         if location.x > deleteZoneX && location.y > deleteZoneY {
             deleteNote(draggedNote.id)

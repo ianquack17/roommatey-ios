@@ -7,7 +7,6 @@
 
 import Foundation
 import Combine
-import UIKit
 
 class ProfileViewModel: ObservableObject {
     @Published var profileName: String = ""
@@ -63,7 +62,9 @@ class ProfileViewModel: ObservableObject {
     }
     
     func copyInviteLink() {
-        UIPasteboard.general.string = inviteLink
+        // In MVVM, the ViewModel should not directly interact with UI components like UIPasteboard.
+        // The View layer should handle the actual copying operation.
+        // This method just signals that a copy action should occur.
         showingCopiedAlert = true
     }
     

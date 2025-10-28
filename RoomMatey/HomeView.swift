@@ -28,19 +28,9 @@ struct HomeView: View {
                     .padding(.horizontal)
                     .padding(.top)
                     
-                    // Weekly Calendar
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("This Week")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal)
-                        
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                            ForEach(viewModel.currentWeek, id: \.self) { date in
-                                DayView(date: date, viewModel: viewModel)
-                            }
-                        }
-                        .padding(.horizontal)
+                    // Monthly Calendar
+                    VStack(alignment: .leading, spacing: 12) {
+                        MonthCalendarView()
                     }
                 }
             }
