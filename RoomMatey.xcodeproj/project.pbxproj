@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A5AC95062EE6348100AF5B93 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A5AC95052EE6348100AF5B93 /* FirebaseAuth */; };
+		A5AC95082EE6348100AF5B93 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A5AC95072EE6348100AF5B93 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A57D165E2EA68EF00054F029 /* RoomMatey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoomMatey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5AC95062EE6348100AF5B93 /* FirebaseAuth in Frameworks */,
+				A5AC95082EE6348100AF5B93 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +72,8 @@
 			);
 			name = RoomMatey;
 			packageProductDependencies = (
+				A5AC95052EE6348100AF5B93 /* FirebaseAuth */,
+				A5AC95072EE6348100AF5B93 /* FirebaseFirestore */,
 			);
 			productName = RoomMatey;
 			productReference = A57D165E2EA68EF00054F029 /* RoomMatey.app */;
@@ -94,6 +103,9 @@
 			);
 			mainGroup = A57D16552EA68EF00054F029;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A5AC95042EE6348100AF5B93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A57D165F2EA68EF00054F029 /* Products */;
 			projectDirPath = "";
@@ -345,6 +357,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A5AC95042EE6348100AF5B93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A5AC95052EE6348100AF5B93 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A5AC95042EE6348100AF5B93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		A5AC95072EE6348100AF5B93 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A5AC95042EE6348100AF5B93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A57D16562EA68EF00054F029 /* Project object */;
 }

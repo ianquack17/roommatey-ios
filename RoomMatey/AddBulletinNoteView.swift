@@ -105,6 +105,7 @@ struct AddBulletinNoteView: View {
         }
     }
     
+    // Function to save the note
     private func saveNote() {
         let newNote = BulletinNote(
             subject: subject,

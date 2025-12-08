@@ -8,11 +8,11 @@
 import SwiftUI
 
 struct MonthCalendarView: View {
-    @State private var visibleMonth: Date = Date() // today by default
+    @State private var visibleMonth: Date = Date() // set today by default
     private let calendar = Calendar.current
     private let weekdaySymbols = Calendar.current.shortWeekdaySymbols
 
-    // hardcoded events
+    // hardcoded events (remove after creating the backend)
     private let demoEvents: Set<Date> = {
         let cal = Calendar.current
         func d(_ y:Int,_ m:Int,_ day:Int) -> Date { cal.date(from: DateComponents(year: y, month: m, day: day))! }
@@ -50,7 +50,6 @@ struct MonthCalendarView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Header
     private var header: some View {
         HStack {
             Button {
@@ -78,8 +77,7 @@ struct MonthCalendarView: View {
         }
     }
 
-    // MARK: - Helpers
-    /// A day in the grid; `nil` means a blank placeholder cell.
+    // Helpers
     private func monthGrid(for month: Date) -> [Date?] {
         let start = startOfMonth(month)
         let daysIn = calendar.range(of: .day, in: .month, for: start)!.count
@@ -121,7 +119,7 @@ private struct DayCell: View {
 
     var body: some View {
         ZStack {
-            // background for today
+            // background for today tile
             RoundedRectangle(cornerRadius: 8)
                 .fill(isToday ? Color.blue.opacity(0.12) : .clear)
 

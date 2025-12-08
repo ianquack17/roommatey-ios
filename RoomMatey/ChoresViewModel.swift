@@ -7,101 +7,107 @@
 
 import Foundation
 import Combine
+import FirebaseFirestore
 
 class ChoresViewModel: ObservableObject {
     @Published var chores: [Chore] = []
     @Published var showingAddChore = false
     @Published var selectedChore: Chore?
     
-    private let userDefaults = UserDefaults.standard
-    private let choresKey = "savedChores"
+    private var db = Firestore.firestore()
+    private var listener: ListenerRegistration?
+    
+    private var currentGroupID: String {
+        UserDefaults.standard.string(forKey: "groupID") ?? ""
+    }
     
     init() {
-        loadChores()
-        if chores.isEmpty {
-            setupDefaultChores()
+        startRealtimeUpdates()
+    }
+    
+    deinit {
+        listener?.remove()
+    }
+    
+    // Firestore Sync
+    
+    func startRealtimeUpdates() {
+        guard !currentGroupID.isEmpty else { return }
+        
+        // Listen to: groups -> [groupID] -> chores
+        listener = db.collection("groups").document(currentGroupID).collection("chores")
+            .addSnapshotListener { [weak self] querySnapshot, error in
+                guard let documents = querySnapshot?.documents else {
+                    print("Error fetching chores: \(error?.localizedDescription ?? "Unknown error")")
+                    return
+                }
+                
+                self?.chores = documents.compactMap { document -> Chore? in
+                    try? document.data(as: Chore.self)
+                }
+            }
+    }
+    
+    // User Actions
+    
+    func addChore(_ chore: Chore) {
+        guard !currentGroupID.isEmpty else { return }
+        
+        do {
+            try db.collection("groups").document(currentGroupID).collection("chores")
+                .document(chore.id.uuidString)
+                .setData(from: chore)
+        } catch {
+            print("Error adding chore: \(error)")
         }
     }
     
-    func addChore(_ chore: Chore) {
-        chores.append(chore)
-        saveChores()
-    }
-    
     func updateChore(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index] = chore
-            saveChores()
+        guard !currentGroupID.isEmpty else { return }
+        
+        do {
+            try db.collection("groups").document(currentGroupID).collection("chores")
+                .document(chore.id.uuidString)
+                .setData(from: chore)
+        } catch {
+            print("Error updating chore: \(error)")
         }
     }
     
     func deleteChore(_ chore: Chore) {
-        chores.removeAll { $0.id == chore.id }
-        saveChores()
+        guard !currentGroupID.isEmpty else { return }
+        
+        db.collection("groups").document(currentGroupID).collection("chores")
+            .document(chore.id.uuidString)
+            .delete()
     }
     
+    // Firebase Logic
+    
+    // This calculates the new state locally, then saves it to Firestore
     func markChoreComplete(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index].doneBy = chore.nextPerson
-            chores[index].date = Date()
-            // Rotate to next person in assigned list
-            if let currentIndex = chores[index].assignedTo.firstIndex(of: chore.nextPerson) {
-                let nextIndex = (currentIndex + 1) % chores[index].assignedTo.count
-                chores[index].nextPerson = chores[index].assignedTo[nextIndex]
-            }
-            saveChores()
+        var updatedChore = chore
+        
+        // Mark current person as the "doer"
+        updatedChore.doneBy = chore.nextPerson
+        updatedChore.date = Date()
+        updatedChore.lastCompleted = Date()
+        
+        // Calculate next person for chore
+        if let currentIndex = chore.assignedTo.firstIndex(of: chore.nextPerson) {
+            let nextIndex = (currentIndex + 1) % chore.assignedTo.count
+            updatedChore.nextPerson = chore.assignedTo[nextIndex]
         }
+        
+        // Send update to database
+        updateChore(updatedChore)
     }
     
-    func showAddChore() {
-        showingAddChore = true
-    }
-    
-    func hideAddChore() {
-        showingAddChore = false
-    }
+    // UI Helpers
+    func showAddChore() { showingAddChore = true }
+    func hideAddChore() { showingAddChore = false }
     
     func selectChore(_ chore: Chore?) {
         selectedChore = chore
-    }
-    
-    private func setupDefaultChores() {
-        let defaultChores = [
-            Chore(
-                task: "Dishes",
-                doneBy: "Alex",
-                date: Date(),
-                nextPerson: "Sam",
-                frequency: .daily,
-                description: "Wash and put away all dishes",
-                lastCompleted: nil,
-                assignedTo: ["Alex", "Sam"]
-            ),
-            Chore(
-                task: "Trash",
-                doneBy: "Sam",
-                date: Date(),
-                nextPerson: "Alex",
-                frequency: .weekly,
-                description: "Take out all trash and recycling",
-                lastCompleted: nil,
-                assignedTo: ["Alex", "Sam"]
-            )
-        ]
-        chores = defaultChores
-        saveChores()
-    }
-    
-    private func loadChores() {
-        if let data = userDefaults.data(forKey: choresKey),
-           let decodedChores = try? JSONDecoder().decode([Chore].self, from: data) {
-            chores = decodedChores
-        }
-    }
-    
-    private func saveChores() {
-        if let encoded = try? JSONEncoder().encode(chores) {
-            userDefaults.set(encoded, forKey: choresKey)
-        }
     }
 }

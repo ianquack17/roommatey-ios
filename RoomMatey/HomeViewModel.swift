@@ -7,82 +7,139 @@
 
 import Foundation
 import Combine
+import FirebaseFirestore
+import SwiftUI
 
-struct RoommateSchedule: Identifiable, Codable {
+// Models
+struct RoommateSchedule: Identifiable {
     let id = UUID()
     let name: String
     let events: [ScheduleEvent]
 }
 
 struct ScheduleEvent: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let title: String
     let startTime: Date
     let endTime: Date
-    let color: String // Hex color string
+    let color: String
     let isAllDay: Bool
+    let createdBy: String
+    
+    init(id: UUID = UUID(), title: String, startTime: Date, endTime: Date, color: String, isAllDay: Bool, createdBy: String) {
+        self.id = id
+        self.title = title
+        self.startTime = startTime
+        self.endTime = endTime
+        self.color = color
+        self.isAllDay = isAllDay
+        self.createdBy = createdBy
+    }
 }
 
 class HomeViewModel: ObservableObject {
-    @Published var currentUser: String = ""
     @Published var roommateSchedules: [RoommateSchedule] = []
     @Published var currentWeek: [Date] = []
+    @Published var showingAddEvent = false
+    @Published var roommates: [String] = []
+    @Published var groupNameLabel: String = "My Group"
+    @Published var groupCodeLabel: String = ""
     
-    private let userDefaults = UserDefaults.standard
+    @AppStorage("profileName") var profileName: String = ""
+    @AppStorage("groupID") var currentGroupID: String = ""
+    
+    private var db = Firestore.firestore()
+    private var listener: ListenerRegistration?
+    private var groupListener: ListenerRegistration?
+    private var allEvents: [ScheduleEvent] = []
     
     init() {
-        loadUserData()
         setupCurrentWeek()
-        setupHardcodedSchedules()
+        startRealtimeUpdates()
+        fetchGroupDetails() // Call the new fetcher
     }
+    
+    deinit {
+        listener?.remove()
+        groupListener?.remove()
+    }
+    
+    // Firestore
+    
+    // Fetch existing events
+    func startRealtimeUpdates() {
+        guard !currentGroupID.isEmpty else { return }
+        
+        listener = db.collection("groups").document(currentGroupID).collection("events")
+            .addSnapshotListener { [weak self] querySnapshot, error in
+                guard let documents = querySnapshot?.documents else { return }
+                
+                let events = documents.compactMap { try? $0.data(as: ScheduleEvent.self) }
+                self?.allEvents = events
+                self?.groupEventsByPerson(events)
+            }
+    }
+    
+    // Fetch Group Details (members + code)
+    func fetchGroupDetails() {
+        guard !currentGroupID.isEmpty else { return }
+        
+        groupListener = db.collection("groups").document(currentGroupID)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let data = snapshot?.data() else { return }
+                
+                DispatchQueue.main.async {
+                    // Update Members List
+                    if let members = data["members"] as? [String] {
+                        self?.roommates = members
+                    }
+                    // Update Group Name
+                    if let name = data["name"] as? String {
+                        self?.groupNameLabel = name
+                    }
+                    // Update Invite Code
+                    if let code = data["code"] as? String {
+                        self?.groupCodeLabel = code
+                    }
+                }
+            }
+    }
+    
+    func addEvent(_ event: ScheduleEvent) {
+        guard !currentGroupID.isEmpty else { return }
+        do {
+            try db.collection("groups").document(currentGroupID).collection("events")
+                .document(event.id.uuidString)
+                .setData(from: event)
+        } catch { print("Error adding event: \(error)") }
+    }
+    
+    private func groupEventsByPerson(_ events: [ScheduleEvent]) {
+        let grouped = Dictionary(grouping: events, by: { $0.createdBy })
+        self.roommateSchedules = grouped.map { (name, userEvents) in
+            RoommateSchedule(name: name, events: userEvents)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    // UI Helpers
     
     var greetingMessage: String {
         let hour = Calendar.current.component(.hour, from: Date())
         let timeOfDay: String
-        
         switch hour {
-        case 5..<12:
-            timeOfDay = "Good morning"
-        case 12..<17:
-            timeOfDay = "Good afternoon"
-        case 17..<22:
-            timeOfDay = "Good evening"
-        default:
-            timeOfDay = "Good night"
+        case 5..<12: timeOfDay = "Good morning"
+        case 12..<17: timeOfDay = "Good afternoon"
+        case 17..<22: timeOfDay = "Good evening"
+        default: timeOfDay = "Good night"
         }
-        
-        return "\(timeOfDay), \(currentUser.isEmpty ? "Roommate" : currentUser)!"
+        return "\(timeOfDay), \(profileName)!"
     }
     
     func getEventsForDate(_ date: Date) -> [ScheduleEvent] {
         let calendar = Calendar.current
-        var events: [ScheduleEvent] = []
-        
-        for schedule in roommateSchedules {
-            for event in schedule.events {
-                if calendar.isDate(event.startTime, inSameDayAs: date) {
-                    events.append(event)
-                }
-            }
-        }
-        
-        return events.sorted { $0.startTime < $1.startTime }
-    }
-    
-    func getRoommatesForEvent(_ event: ScheduleEvent) -> [String] {
-        var roommates: [String] = []
-        
-        for schedule in roommateSchedules {
-            if schedule.events.contains(where: { $0.id == event.id }) {
-                roommates.append(schedule.name)
-            }
-        }
-        
-        return roommates
-    }
-    
-    private func loadUserData() {
-        currentUser = userDefaults.string(forKey: "profileName") ?? ""
+        return allEvents.filter { event in
+            calendar.isDate(event.startTime, inSameDayAs: date)
+        }.sorted { $0.startTime < $1.startTime }
     }
     
     private func setupCurrentWeek() {
@@ -95,68 +152,5 @@ class HomeViewModel: ObservableObject {
         }
     }
     
-    private func setupHardcodedSchedules() {
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // Alex's schedule
-        let alexEvents = [
-            ScheduleEvent(
-                title: "Work",
-                startTime: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 17, minute: 0, second: 0, of: today) ?? today,
-                color: "#007AFF",
-                isAllDay: false
-            ),
-            ScheduleEvent(
-                title: "Gym",
-                startTime: calendar.date(bySettingHour: 18, minute: 30, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 20, minute: 0, second: 0, of: today) ?? today,
-                color: "#FF9500",
-                isAllDay: false
-            )
-        ]
-        
-        // Sam's schedule
-        let samEvents = [
-            ScheduleEvent(
-                title: "Classes",
-                startTime: calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today) ?? today,
-                color: "#34C759",
-                isAllDay: false
-            ),
-            ScheduleEvent(
-                title: "Study Group",
-                startTime: calendar.date(bySettingHour: 19, minute: 0, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 21, minute: 0, second: 0, of: today) ?? today,
-                color: "#AF52DE",
-                isAllDay: false
-            )
-        ]
-        
-        // Current user's schedule
-        let userEvents = [
-            ScheduleEvent(
-                title: "Remote Work",
-                startTime: calendar.date(bySettingHour: 8, minute: 30, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 16, minute: 30, second: 0, of: today) ?? today,
-                color: "#FF3B30",
-                isAllDay: false
-            ),
-            ScheduleEvent(
-                title: "Dinner with Friends",
-                startTime: calendar.date(bySettingHour: 19, minute: 30, second: 0, of: today) ?? today,
-                endTime: calendar.date(bySettingHour: 22, minute: 0, second: 0, of: today) ?? today,
-                color: "#FF2D92",
-                isAllDay: false
-            )
-        ]
-        
-        roommateSchedules = [
-            RoommateSchedule(name: "Alex", events: alexEvents),
-            RoommateSchedule(name: "Sam", events: samEvents),
-            RoommateSchedule(name: currentUser.isEmpty ? "You" : currentUser, events: userEvents)
-        ]
-    }
+    func showAddEvent() { showingAddEvent = true }
 }

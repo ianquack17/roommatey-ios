@@ -62,9 +62,7 @@ class ProfileViewModel: ObservableObject {
     }
     
     func copyInviteLink() {
-        // In MVVM, the ViewModel should not directly interact with UI components like UIPasteboard.
-        // The View layer should handle the actual copying operation.
-        // This method just signals that a copy action should occur.
+        // Update this so the copy function is not in the VIew
         showingCopiedAlert = true
     }
     

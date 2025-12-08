@@ -7,34 +7,26 @@
 
 import SwiftUI
 import PhotosUI
+import FirebaseAuth
+import FirebaseFirestore
 
 struct ProfileView: View {
+    @EnvironmentObject var appState: AppState
+    
     @AppStorage("profileName") var profileName: String = ""
     @AppStorage("groupName") var groupName: String = ""
+    @AppStorage("groupID") var groupID: String = ""
     @AppStorage("profileImageData") var profileImageData: Data?
-    @AppStorage("isAuthenticated") var isAuthenticated: Bool = false
-    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
-
+    
     @State private var newName: String = ""
     @State private var showingCopiedAlert = false
     @State private var selectedItem: PhotosPickerItem? = nil
-    @State private var showingShareSheet = false
-
-    var inviteLink: String {
-        "roommatey://join/\(groupName.replacingOccurrences(of: " ", with: "%20"))"
-    }
-
-    func resetAllData() {
-        profileName = ""
-        groupName = ""
-        profileImageData = nil
-        isAuthenticated = false
-        hasCompletedOnboarding = false
-    }
-
+    @State private var groupInviteCode: String = "Loading..."
+    
     var body: some View {
         NavigationView {
             ScrollView {
+                // Header Image
                 GeometryReader { geo in
                     let offset = max(-geo.frame(in: .global).minY, 0)
                     let scale = max(1 - (offset / 500), 0.7)
@@ -70,7 +62,7 @@ struct ProfileView: View {
                 .frame(height: 200)
 
                 VStack(spacing: 20) {
-                    // Profile Section
+                    // Profile Name
                     GroupBox {
                         VStack(alignment: .leading, spacing: 16) {
                             Label("Profile", systemImage: "person.fill")
@@ -95,7 +87,7 @@ struct ProfileView: View {
                         .padding(.vertical, 8)
                     }
 
-                    // Group Section
+                    // Group Management
                     GroupBox {
                         VStack(alignment: .leading, spacing: 16) {
                             Label("Group", systemImage: "person.3.fill")
@@ -107,6 +99,7 @@ struct ProfileView: View {
                             
                             Button(action: {
                                 groupName = ""
+                                groupID = ""
                             }) {
                                 Text("Leave Group")
                                     .frame(maxWidth: .infinity)
@@ -119,62 +112,65 @@ struct ProfileView: View {
                         .padding(.vertical, 8)
                     }
 
-                    // Invite Section
+                    // Invite section (fix the copy button)
                     GroupBox {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Label("Invite to Group", systemImage: "link")
-                                .font(.headline)
-                                .foregroundColor(.blue)
+                        VStack(alignment: .center, spacing: 16) {
+                            HStack {
+                                Label("Invite Roommates", systemImage: "link")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
                             
-                            HStack(spacing: 12) {
-                                Button(action: {
-//                                    UIPasteboard.general.string = inviteLink
-                                    showingCopiedAlert = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "doc.on.doc")
-                                        Text("Copy Link")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                                }
+                            VStack(spacing: 8) {
+                                Text("Share this code with your roommates:")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
                                 
-                                Button(action: {
-                                    showingShareSheet = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "message.fill")
-                                        Text("Send Link")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(Color.green)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
+                                Text(groupInviteCode)
+                                    .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                                    .foregroundColor(.primary)
+                                    .padding(.vertical, 4)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(12)
+                            
+                            Button(action: {
+                                // Fix this to actually copy the update code...
+                                // UIPasteboard.general.string = groupInviteCode
+                                showingCopiedAlert = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "doc.on.doc")
+                                    Text("Copy Code")
                                 }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
                             }
                         }
                         .padding(.vertical, 8)
                     }
 
-                    // Reset Section
+                    // Sign Out
                     GroupBox {
                         VStack(alignment: .leading, spacing: 16) {
-                            Label("Reset", systemImage: "arrow.uturn.left")
+                            Label("Account", systemImage: "rectangle.portrait.and.arrow.right")
                                 .font(.headline)
-                                .foregroundColor(.blue)
+                                .foregroundColor(.red)
                             
                             Button(action: {
-                                resetAllData()
+                                appState.authenticationViewModel.signOut()
                             }) {
-                                Text("Reset All Data")
+                                Text("Sign Out")
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 8)
-                                    .background(Color.red.opacity(0.1))
-                                    .foregroundColor(.red)
+                                    .background(Color.red)
+                                    .foregroundColor(.white)
                                     .cornerRadius(8)
                             }
                         }
@@ -187,6 +183,7 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 newName = profileName
+                fetchGroupCode() // Fetch the code when view appears
             }
             .onChange(of: selectedItem) { _, newItem in
                 Task {
@@ -195,46 +192,37 @@ struct ProfileView: View {
                     }
                 }
             }
-            .alert("Link Copied!", isPresented: $showingCopiedAlert) {
+            .alert("Code Copied!", isPresented: $showingCopiedAlert) {
                 Button("OK", role: .cancel) { }
             }
-//            .sheet(isPresented: $showingShareSheet) {
-//                if let url = URL(string: inviteLink) {
-//                    ShareSheet(items: [url])
-//                }
-//            }
+        }
+    }
+    
+    private func fetchGroupCode() {
+        guard !groupID.isEmpty else { return }
+        
+        let db = Firestore.firestore()
+        db.collection("groups").document(groupID).getDocument { snapshot, error in
+            if let data = snapshot?.data(), let code = data["code"] as? String {
+                DispatchQueue.main.async {
+                    self.groupInviteCode = code
+                }
+            }
         }
     }
 }
 
-//struct ShareSheet: UIViewControllerRepresentable {
-//    let items: [Any]
-//    
-//    func makeUIViewController(context: Context) -> UIActivityViewController {
-//        UIActivityViewController(activityItems: items, applicationActivities: nil)
-//    }
-//    
-//    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-//}
-
 struct AuthenticationView: View {
-    @AppStorage("isAuthenticated") var isAuthenticated: Bool = false
-    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    @StateObject private var viewModel = AuthenticationViewModel()
+    
     @State private var email = ""
     @State private var password = ""
     @State private var isSignUp = false
-    @State private var showingError = false
-    @State private var errorMessage = ""
     
-    func signOut() {
-        isAuthenticated = false
-        hasCompletedOnboarding = false
-    }
-
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
-                // Logo and Welcome Text
+                // Header
                 VStack(spacing: 16) {
                     Image(systemName: "house.fill")
                         .font(.system(size: 60))
@@ -244,14 +232,10 @@ struct AuthenticationView: View {
                     Text("Welcome to RoomMatey")
                         .font(.largeTitle)
                         .bold()
-                    
-                    Text("Your ultimate roommate companion")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
                 }
                 .padding(.top, 40)
                 
-                // Authentication Form
+                // Form
                 VStack(spacing: 16) {
                     TextField("Email", text: $email)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -264,13 +248,8 @@ struct AuthenticationView: View {
                         .textContentType(isSignUp ? .newPassword : .password)
                     
                     Button(action: {
-                        // Simulate authentication
-                        if email.isEmpty || password.isEmpty {
-                            errorMessage = "Please fill in all fields"
-                            showingError = true
-                        } else {
-                            isAuthenticated = true
-                        }
+                        // Call the Real Firebase Auth
+                        viewModel.authenticate(email: email, password: password, isSignUp: isSignUp)
                     }) {
                         Text(isSignUp ? "Create Account" : "Sign In")
                             .frame(maxWidth: .infinity)
@@ -291,17 +270,12 @@ struct AuthenticationView: View {
                 }
                 .padding(.horizontal)
                 
-                // Add sign out button
-                Button(action: signOut) {
-                    Text("Sign Out")
-                        .foregroundColor(.red)
-                }
-                .padding(.top)
+                Spacer()
             }
-            .alert("Error", isPresented: $showingError) {
+            .alert("Error", isPresented: $viewModel.showingError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text(errorMessage)
+                Text(viewModel.errorMessage)
             }
         }
     }
@@ -356,7 +330,17 @@ struct ProfileSetupView: View {
                         .padding(.horizontal)
                     
                     Button(action: {
-                        profileName = inputName.trimmingCharacters(in: .whitespaces)
+                        let finalName = inputName.trimmingCharacters(in: .whitespaces)
+                                            
+                        // Save Locally
+                        profileName = finalName
+                                            
+                        // Save to Firestore Cloud
+                        if let uid = Auth.auth().currentUser?.uid {
+                            Firestore.firestore().collection("users").document(uid).setData([
+                                "name": finalName
+                            ], merge: true)
+                        }
                     }) {
                         Text("Continue")
                             .frame(maxWidth: .infinity)
@@ -459,69 +443,80 @@ struct GroupSetupView: View {
 struct CreateGroupView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var groupName: String
+    
+    @AppStorage("groupID") var groupID: String = ""
+    @AppStorage("profileName") var profileName: String = ""
+    
     @State private var newGroupName = ""
-    @State private var showingCopiedAlert = false
+    @State private var isLoading = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 16) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.blue)
-                        .symbolEffect(.bounce, options: .repeating)
-                    
-                    Text("Create New Group")
-                        .font(.title)
-                        .bold()
-                    
-                    Text("Give your group a name to get started")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 40)
+                // Header Icon
+                Image(systemName: "house.lodge.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
+                    .padding(.top, 20)
                 
-                // Form
-                VStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Group Name")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                        
-                        TextField("Enter group name", text: $newGroupName)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(.title3)
-                    }
+                Text("Name Your Household")
+                    .font(.title2)
+                    .bold()
+                
+                // Styled Input Field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("GROUP NAME")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.gray)
                     
-                    Button(action: {
-                        groupName = newGroupName.trimmingCharacters(in: .whitespaces)
-                        dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Create Group")
-                        }
-                        .frame(maxWidth: .infinity)
+                    TextField("e.g. Apt 4B, The Castle, etc.", text: $newGroupName)
                         .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                        .shadow(color: .blue.opacity(0.3), radius: 5, x: 0, y: 2)
-                    }
-                    .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
                 }
                 .padding(.horizontal)
                 
                 Spacer()
+                
+                // Big Action Button
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Button(action: {
+                        isLoading = true
+                        FirebaseManager.shared.createGroup(groupName: newGroupName, userName: profileName) { newGroupID in
+                            isLoading = false
+                            if let id = newGroupID {
+                                groupName = newGroupName
+                                groupID = id
+                                dismiss()
+                            }
+                        }
+                    }) {
+                        Text("Create Group")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .cornerRadius(12)
+                            .shadow(radius: 2)
+                    }
+                    .padding(.horizontal)
+                    .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1.0)
+                }
             }
+            .padding(.bottom, 20)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
@@ -531,81 +526,97 @@ struct CreateGroupView: View {
 struct JoinGroupView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var groupName: String
+    
+    @AppStorage("groupID") var groupID: String = ""
+    @AppStorage("profileName") var profileName: String = ""
+    
     @State private var inviteCode = ""
     @State private var showingError = false
+    @State private var isLoading = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 16) {
-                    Image(systemName: "person.badge.plus.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.green)
-                        .symbolEffect(.bounce, options: .repeating)
-                    
-                    Text("Join Existing Group")
-                        .font(.title)
-                        .bold()
-                    
-                    Text("Enter the invite code to join your group")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 40)
+                // Header Icon
+                Image(systemName: "person.3.sequence.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.green)
+                    .padding(.top, 20)
                 
-                // Form
-                VStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Invite Code")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                        
-                        TextField("Enter invite code", text: $inviteCode)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(.title3)
-                            .autocapitalization(.none)
-                            .textInputAutocapitalization(.never)
-                    }
+                Text("Join a Household")
+                    .font(.title2)
+                    .bold()
+                
+                Text("Enter the 5-character code from your roommate.")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                // Styled Input Field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("INVITE CODE")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.gray)
                     
-                    Button(action: {
-                        if inviteCode.isEmpty {
-                            showingError = true
-                        } else {
-                            groupName = "Test Group" // For demo purposes
-                            dismiss()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.right.circle.fill")
-                            Text("Join Group")
-                        }
-                        .frame(maxWidth: .infinity)
+                    TextField("X7Y2Z", text: $inviteCode)
                         .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                        .shadow(color: .green.opacity(0.3), radius: 5, x: 0, y: 2)
-                    }
-                    .disabled(inviteCode.isEmpty)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .textInputAutocapitalization(.characters) // Force caps for invite code
+                        .disableAutocorrection(true)
                 }
                 .padding(.horizontal)
                 
                 Spacer()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
-                        dismiss()
+                
+                // Big Action Button
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Button(action: {
+                        isLoading = true
+                        FirebaseManager.shared.joinGroup(inviteCode: inviteCode.uppercased(), userName: profileName) { id, name in
+                            isLoading = false
+                            if let id = id, let name = name {
+                                groupID = id
+                                groupName = name
+                                dismiss()
+                            } else {
+                                showingError = true
+                            }
+                        }
+                    }) {
+                        Text("Join Group")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .cornerRadius(12)
+                            .shadow(radius: 2)
                     }
+                    .padding(.horizontal)
+                    .disabled(inviteCode.isEmpty)
+                    .opacity(inviteCode.isEmpty ? 0.6 : 1.0)
                 }
             }
+            .padding(.bottom, 20)
             .alert("Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Please enter a valid invite code")
+                Text("Could not find a group with that code.")
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
             }
         }
     }

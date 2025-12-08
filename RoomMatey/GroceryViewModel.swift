@@ -7,87 +7,89 @@
 
 import Foundation
 import Combine
+import FirebaseFirestore
+import SwiftUI
 
 class GroceryViewModel: ObservableObject {
     @Published var groceries: [GroceryItem] = []
     @Published var showingAddItem = false
-    @Published var groupName: String = ""
-    @Published var profileName: String = ""
+    @AppStorage("profileName") var profileName: String = ""
+    @AppStorage("groupID") var currentGroupID: String = ""
     
-    private let userDefaults = UserDefaults.standard
-    private let groceriesKey = "savedGroceries"
+    private var db = Firestore.firestore()
+    private var listener: ListenerRegistration?
     
     init() {
-        loadUserData()
-        loadGroceries()
+        startRealtimeUpdates()
     }
     
-    var availableRoommates: [String] {
-        if groupName == "Test Group" {
-            return ["Alex", "Sam", profileName]
-        } else {
-            return [profileName]
-        }
+    deinit {
+        listener?.remove()
     }
+    
+    // Firestore Sync
+    func startRealtimeUpdates() {
+        guard !currentGroupID.isEmpty else { return }
+        
+        listener = db.collection("groups").document(currentGroupID).collection("groceries")
+            .addSnapshotListener { [weak self] querySnapshot, error in
+                guard let documents = querySnapshot?.documents else {
+                    print("Error fetching groceries: \(error?.localizedDescription ?? "Unknown")")
+                    return
+                }
+                
+                self?.groceries = documents.compactMap { document -> GroceryItem? in
+                    try? document.data(as: GroceryItem.self)
+                }
+            }
+    }
+    
+    // User Actions
     
     func addGroceryItem(_ item: GroceryItem) {
-        groceries.append(item)
-        saveGroceries()
+        guard !currentGroupID.isEmpty else { return }
+        do {
+            try db.collection("groups").document(currentGroupID).collection("groceries")
+                .document(item.id.uuidString)
+                .setData(from: item)
+        } catch {
+            print("Error adding grocery: \(error)")
+        }
     }
     
     func togglePurchaseStatus(for item: GroceryItem) {
-        if let index = groceries.firstIndex(where: { $0.id == item.id }) {
-            groceries[index].isPurchased.toggle()
-            saveGroceries()
-        }
+        guard !currentGroupID.isEmpty else { return }
+        
+        // Toggle local value then send to DB
+        let newValue = !item.isPurchased
+        
+        db.collection("groups").document(currentGroupID).collection("groceries")
+            .document(item.id.uuidString)
+            .updateData(["isPurchased": newValue])
     }
     
     func assignItem(_ item: GroceryItem, to roommate: String?) {
-        if let index = groceries.firstIndex(where: { $0.id == item.id }) {
-            groceries[index].assignedTo = roommate
-            saveGroceries()
-        }
+        guard !currentGroupID.isEmpty else { return }
+        
+        db.collection("groups").document(currentGroupID).collection("groceries")
+            .document(item.id.uuidString)
+            .updateData(["assignedTo": roommate as Any])
     }
     
     func deleteItem(_ item: GroceryItem) {
-        groceries.removeAll { $0.id == item.id }
-        saveGroceries()
+        guard !currentGroupID.isEmpty else { return }
+        
+        db.collection("groups").document(currentGroupID).collection("groceries")
+            .document(item.id.uuidString)
+            .delete()
     }
     
-    func showAddItem() {
-        showingAddItem = true
-    }
+    // Helpers
+    func showAddItem() { showingAddItem = true }
+    func hideAddItem() { showingAddItem = false }
     
-    func hideAddItem() {
-        showingAddItem = false
-    }
-    
-    func updateUserData(profileName: String, groupName: String) {
-        self.profileName = profileName
-        self.groupName = groupName
-        saveUserData()
-    }
-    
-    private func loadUserData() {
-        profileName = userDefaults.string(forKey: "profileName") ?? ""
-        groupName = userDefaults.string(forKey: "groupName") ?? ""
-    }
-    
-    private func saveUserData() {
-        userDefaults.set(profileName, forKey: "profileName")
-        userDefaults.set(groupName, forKey: "groupName")
-    }
-    
-    private func loadGroceries() {
-        if let data = userDefaults.data(forKey: groceriesKey),
-           let decodedGroceries = try? JSONDecoder().decode([GroceryItem].self, from: data) {
-            groceries = decodedGroceries
-        }
-    }
-    
-    private func saveGroceries() {
-        if let encoded = try? JSONEncoder().encode(groceries) {
-            userDefaults.set(encoded, forKey: groceriesKey)
-        }
+    // Placeholder!!!
+    var availableRoommates: [String] {
+        return [profileName, "Roommate"]
     }
 }

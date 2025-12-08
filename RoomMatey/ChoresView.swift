@@ -46,6 +46,11 @@ struct ChoresView: View {
                         .padding(.vertical, 4)
                     }
                 }
+                .onDelete { indexSet in
+                    for index in indexSet {
+                        viewModel.deleteChore(viewModel.chores[index])
+                    }
+                }
             }
             .navigationTitle("Chores")
             .toolbar {
@@ -58,10 +63,10 @@ struct ChoresView: View {
                 }
             }
             .sheet(isPresented: $viewModel.showingAddChore) {
-                AddChoreView(chores: $viewModel.chores)
+                AddChoreView(viewModel: viewModel)
             }
             .sheet(item: $viewModel.selectedChore) { chore in
-                ChoreDetailView(chore: chore, chores: $viewModel.chores)
+                ChoreDetailView(chore: chore, viewModel: viewModel)
             }
         }
     }

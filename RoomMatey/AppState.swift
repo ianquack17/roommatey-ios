@@ -24,9 +24,4 @@ class AppState: ObservableObject {
         authenticationViewModel.$isAuthenticated
             .assign(to: &$isAuthenticated)
     }
-    
-    func signIn() {
-        authenticationViewModel.signIn(name: "")
-        self.isAuthenticated = true
-    }
 }

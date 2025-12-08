@@ -6,14 +6,24 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct GroceryItem: Identifiable, Codable {
-    var id: UUID = UUID()
+    let id: UUID
     var name: String
     var quantity: String
     var addedBy: String
-    var isPurchased: Bool = false
+    var isPurchased: Bool
     var assignedTo: String?
+    
+    init(id: UUID = UUID(), name: String, quantity: String, addedBy: String, isPurchased: Bool = false, assignedTo: String? = nil) {
+        self.id = id
+        self.name = name
+        self.quantity = quantity
+        self.addedBy = addedBy
+        self.isPurchased = isPurchased
+        self.assignedTo = assignedTo
+    }
 }
 
 struct GroceryView: View {
@@ -27,9 +37,7 @@ struct GroceryView: View {
                     GroceryItemRow(item: item, viewModel: viewModel)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
-                                withAnimation {
-                                    viewModel.deleteItem(item)
-                                }
+                                viewModel.deleteItem(item) // Now calls Firestore
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -39,7 +47,7 @@ struct GroceryView: View {
             .navigationTitle("Grocery List")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { 
+                    Button(action: {
                         viewModel.showAddItem()
                     }) {
                         Image(systemName: "plus")
@@ -55,26 +63,26 @@ struct GroceryView: View {
 
 struct GroceryItemRow: View {
     let item: GroceryItem
-    let viewModel: GroceryViewModel
+    @ObservedObject var viewModel: GroceryViewModel // Access DB logic
     @State private var isShowingAssignment = false
     
     var body: some View {
         HStack {
             Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    viewModel.togglePurchaseStatus(for: item)
-                }
+                // Call ViewModel to toggle status
+                viewModel.togglePurchaseStatus(for: item)
             }) {
                 Image(systemName: item.isPurchased ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
                     .foregroundColor(item.isPurchased ? .green : .gray)
-                    .symbolEffect(.bounce, value: item.isPurchased)
             }
+            .buttonStyle(PlainButtonStyle()) // Fix for button in List
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.headline)
                     .strikethrough(item.isPurchased)
+                    .foregroundColor(item.isPurchased ? .gray : .primary)
                 
                 HStack {
                     Text("Qty: \(item.quantity)")
@@ -98,9 +106,9 @@ struct GroceryItemRow: View {
                 Image(systemName: "person.crop.circle.badge.plus")
                     .foregroundColor(.blue)
             }
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
         .confirmationDialog("Assign to", isPresented: $isShowingAssignment) {
             Button("Unassign") {
                 viewModel.assignItem(item, to: nil)
@@ -119,7 +127,8 @@ struct GroceryItemRow: View {
 
 struct AddGroceryItemView: View {
     @Environment(\.dismiss) var dismiss
-    let viewModel: GroceryViewModel
+    @ObservedObject var viewModel: GroceryViewModel // Access DB logic
+    
     @State private var name = ""
     @State private var quantity = ""
     @State private var assignedTo: String?
@@ -156,6 +165,7 @@ struct AddGroceryItemView: View {
                             addedBy: viewModel.profileName,
                             assignedTo: assignedTo
                         )
+                        // CRITICAL: Call DB function
                         viewModel.addGroceryItem(newItem)
                         dismiss()
                     }

@@ -6,9 +6,11 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
+// Chore struct for firebase
 struct Chore: Identifiable, Codable {
-    var id: UUID = UUID()
+    let id: UUID
     var task: String
     var doneBy: String
     var date: Date
@@ -17,6 +19,19 @@ struct Chore: Identifiable, Codable {
     var description: String
     var lastCompleted: Date?
     var assignedTo: [String]
+    
+    // init to help with creation of chore
+    init(id: UUID = UUID(), task: String, doneBy: String, date: Date, nextPerson: String, frequency: ChoreFrequency, description: String, lastCompleted: Date? = nil, assignedTo: [String]) {
+        self.id = id
+        self.task = task
+        self.doneBy = doneBy
+        self.date = date
+        self.nextPerson = nextPerson
+        self.frequency = frequency
+        self.description = description
+        self.lastCompleted = lastCompleted
+        self.assignedTo = assignedTo
+    }
 }
 
 enum ChoreFrequency: String, Codable, CaseIterable {
@@ -29,7 +44,8 @@ enum ChoreFrequency: String, Codable, CaseIterable {
 
 struct AddChoreView: View {
     @Environment(\.dismiss) var dismiss
-    @Binding var chores: [Chore]
+    @ObservedObject var viewModel: ChoresViewModel // Access the database logic
+    
     @State private var task = ""
     @State private var description = ""
     @State private var frequency: ChoreFrequency = .weekly
@@ -52,30 +68,16 @@ struct AddChoreView: View {
                 }
                 
                 Section("Assign To") {
-                    if groupName == "Test Group" {
-                        ForEach(["Alex", "Sam", profileName], id: \.self) { roommate in
-                            Button(action: {
-                                if selectedRoommates.contains(roommate) {
-                                    selectedRoommates.removeAll { $0 == roommate }
-                                } else {
-                                    selectedRoommates.append(roommate)
-                                }
-                            }) {
-                                HStack {
-                                    Text(roommate)
-                                    Spacer()
-                                    if selectedRoommates.contains(roommate) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
+                    HStack {
                         Text(profileName)
-                            .onAppear {
-                                selectedRoommates = [profileName]
-                            }
+                        Spacer()
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.blue)
+                    }
+                    .onAppear {
+                        if selectedRoommates.isEmpty {
+                            selectedRoommates = [profileName]
+                        }
                     }
                 }
             }
@@ -97,10 +99,11 @@ struct AddChoreView: View {
                             description: description,
                             assignedTo: selectedRoommates
                         )
-                        chores.append(newChore)
+                        // call database function
+                        viewModel.addChore(newChore)
                         dismiss()
                     }
-                    .disabled(task.isEmpty || description.isEmpty || selectedRoommates.isEmpty)
+                    .disabled(task.isEmpty || description.isEmpty)
                 }
             }
         }
@@ -109,7 +112,7 @@ struct AddChoreView: View {
 
 struct ChoreDetailView: View {
     let chore: Chore
-    @Binding var chores: [Chore]
+    @ObservedObject var viewModel: ChoresViewModel // Access the database logic
     @Environment(\.dismiss) var dismiss
     @AppStorage("profileName") var profileName: String = ""
     
@@ -145,20 +148,9 @@ struct ChoreDetailView: View {
                 if chore.nextPerson == profileName {
                     Section {
                         Button("Mark as Complete") {
-                            if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-                                var updatedChore = chore
-                                updatedChore.doneBy = profileName
-                                updatedChore.lastCompleted = Date()
-                                
-                                // Find next person in rotation
-                                if let currentIndex = chore.assignedTo.firstIndex(of: profileName) {
-                                    let nextIndex = (currentIndex + 1) % chore.assignedTo.count
-                                    updatedChore.nextPerson = chore.assignedTo[nextIndex]
-                                }
-                                
-                                chores[index] = updatedChore
-                                dismiss()
-                            }
+                            // CRITICAL: Call the database function!
+                            viewModel.markChoreComplete(chore)
+                            dismiss()
                         }
                         .foregroundColor(.blue)
                     }

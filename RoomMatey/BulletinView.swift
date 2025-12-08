@@ -21,7 +21,7 @@ struct BulletinView: View {
             // Bulletin board
             GeometryReader { geometry in
                 ZStack {
-                    // Cork board texture background
+                    // Cork board kind of texture for background
                     Rectangle()
                         .fill(Color.brown.opacity(0.3))
                         .overlay(
