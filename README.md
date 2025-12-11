@@ -4,6 +4,8 @@
 **Focus Area:** Native iOS (SwiftUi)
 **Course:** Mobile Application Development CIS 357
 
+**[Presentation Link:]**(https://docs.google.com/presentation/d/1sMG2BYdOMhbvv_JzcqInbTDzRY4ZJnAOQ_oIhIDovmo/edit?usp=drivesdk)
+
 ## 1. Overview
 RoomMatey is a iOS application designed to solve the issues of living with a large group under one household.
 
