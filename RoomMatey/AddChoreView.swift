@@ -1,4 +1,4 @@
-	//
+//
 //  AddChoreView.swift
 //  RoomMatey
 //
@@ -44,14 +44,14 @@ enum ChoreFrequency: String, Codable, CaseIterable {
 
 struct AddChoreView: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject var viewModel: ChoresViewModel // Access the database logic
+    @ObservedObject var viewModel: ChoresViewModel
     
     @State private var task = ""
     @State private var description = ""
     @State private var frequency: ChoreFrequency = .weekly
     @State private var selectedRoommates: [String] = []
+    
     @AppStorage("profileName") var profileName: String = ""
-    @AppStorage("groupName") var groupName: String = ""
 
     var body: some View {
         NavigationView {
@@ -67,26 +67,37 @@ struct AddChoreView: View {
                     }
                 }
                 
-                Section("Assign To") {
-                    HStack {
-                        Text(profileName)
-                        Spacer()
-                        Image(systemName: "checkmark")
-                            .foregroundColor(.blue)
-                    }
-                    .onAppear {
-                        if selectedRoommates.isEmpty {
-                            selectedRoommates = [profileName]
+                Section("Assign To (Who rotates?)") {
+                    if viewModel.roommates.isEmpty {
+                        Text("Loading roommates...")
+                            .foregroundColor(.gray)
+                    } else {
+                        ForEach(viewModel.roommates, id: \.self) { roommate in
+                            Button(action: {
+                                if selectedRoommates.contains(roommate) {
+                                    selectedRoommates.removeAll { $0 == roommate }
+                                } else {
+                                    selectedRoommates.append(roommate)
+                                }
+                            }) {
+                                HStack {
+                                    Text(roommate)
+                                    Spacer()
+                                    if selectedRoommates.contains(roommate) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively) // fix keyboard getting stuck
             .navigationTitle("New Chore")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
@@ -99,11 +110,18 @@ struct AddChoreView: View {
                             description: description,
                             assignedTo: selectedRoommates
                         )
-                        // call database function
                         viewModel.addChore(newChore)
                         dismiss()
                     }
-                    .disabled(task.isEmpty || description.isEmpty)
+                    .disabled(task.isEmpty || description.isEmpty || selectedRoommates.isEmpty)
+                }
+            }
+            .onAppear {
+                viewModel.fetchRoommates()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if selectedRoommates.isEmpty {
+                        selectedRoommates = viewModel.roommates
+                    }
                 }
             }
         }
@@ -112,7 +130,7 @@ struct AddChoreView: View {
 
 struct ChoreDetailView: View {
     let chore: Chore
-    @ObservedObject var viewModel: ChoresViewModel // Access the database logic
+    @ObservedObject var viewModel: ChoresViewModel
     @Environment(\.dismiss) var dismiss
     @AppStorage("profileName") var profileName: String = ""
     
@@ -127,7 +145,15 @@ struct ChoreDetailView: View {
                 
                 Section("Status") {
                     LabeledContent("Last Done By", value: chore.doneBy)
-                    LabeledContent("Next Up", value: chore.nextPerson)
+                    
+                    HStack {
+                        Text("Next Up")
+                        Spacer()
+                        Text(chore.nextPerson)
+                            .bold()
+                            .foregroundColor(chore.nextPerson == profileName ? .blue : .primary)
+                    }
+                    
                     if let lastCompleted = chore.lastCompleted {
                         LabeledContent("Last Completed", value: lastCompleted.formatted(date: .abbreviated, time: .shortened))
                     }
@@ -137,23 +163,33 @@ struct ChoreDetailView: View {
                     ForEach(chore.assignedTo, id: \.self) { person in
                         HStack {
                             Text(person)
+                            Spacer()
                             if person == chore.nextPerson {
-                                Image(systemName: "arrow.right")
+                                Text("Next")
+                                    .font(.caption)
+                                    .padding(4)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(4)
                                     .foregroundColor(.blue)
                             }
                         }
                     }
                 }
                 
-                if chore.nextPerson == profileName {
-                    Section {
-                        Button("Mark as Complete") {
-                            // CRITICAL: Call the database function!
-                            viewModel.markChoreComplete(chore)
-                            dismiss()
+                Section {
+                    Button(action: {
+                        viewModel.markChoreComplete(chore)
+                        dismiss()
+                    }) {
+                        HStack {
+                            Spacer()
+                            Text("Mark as Complete")
+                                .bold()
+                            Spacer()
                         }
-                        .foregroundColor(.blue)
                     }
+                    .foregroundColor(.white)
+                    .listRowBackground(Color.blue)
                 }
             }
             .navigationTitle("Chore Details")
